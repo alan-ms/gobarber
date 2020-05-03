@@ -1,0 +1,44 @@
+import Bee from 'bee-queue';
+import CancellationMail from '../app/jobs/CancellationMail';
+import redisConfig from '../config/redis';
+
+const jobs = [CancellationMail];
+
+class Queue {
+  constructor() {
+    this.queues = {};
+
+    this.init();
+  }
+
+  init() {
+    jobs.forEach(({ key, handle }) => {
+      this.queues[key] = {
+        bee: new Bee(key, {
+          redis: redisConfig,
+        }),
+        handle,
+      };
+    });
+  }
+
+  // queue = Ex. CancellationMail.key, job = Ex. appointment data
+  add(queue, job) {
+    return this.queues[queue].bee.createJob(job).save();
+  }
+
+  processQueue() {
+    jobs.forEach(job => {
+      const { bee, handle } = this.queues[job.key];
+
+      bee.on('failed', this.handleFailure).process(handle);
+    });
+  }
+
+  handleFailure(job, err) {
+    // eslint-disable-next-line
+    console.warn(`Queue ${job.queue.name}: FAILED`, err);
+  }
+}
+
+export default new Queue();
